@@ -41,7 +41,7 @@ if __name__ == "__main__":
     # my port number
     parser.add_argument("-p", "--port", help="port number for the proxy node", type=int, default=8080)
     # number of nodes
-    parser.add_argument("-n", "--nodes", help="number of nodes in the network", type=int, default=0)
+    parser.add_argument("-n", "--nodes", help="number of nodes in the network", type=int, default=3)
     # debug mode
     parser.add_argument("-d", "--debug", help="enable debug mode", action="store_true")
 
@@ -70,10 +70,3 @@ if __name__ == "__main__":
 
         dirNode = DirNode(port, numNodes, ip, debug)    
         dirNode.run()
-
-    
-
-
-
-
-

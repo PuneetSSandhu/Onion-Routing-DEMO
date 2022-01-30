@@ -4,12 +4,12 @@ Launches a specified number of nodes
 import argparse
 import os
 import socket
+import pickle
 
-class DirNode:
+class ClientNode:
 
-    def __init__ (self, port, numNodes, ip, debug):
+    def __init__ (self, port, ip, debug):
         self.port = port
-        self.numNodes = numNodes
         self.debug = debug
         self.host = ip
 
@@ -17,12 +17,30 @@ class DirNode:
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.s.bind((self.host, self.port))
         self.s.listen()
-        self.nodeDirectory = nodeDirectory
 
-    def run(self):
+    def requestDirectory(self, dirNodeIP, dirNodePort):
+        # connect to the directory node
+        self.directorySocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.directorySocket.connect((dirNodeIP, dirNodePort))
+
+        # for a message to request the directory
+        message = "req,\r\r"
+
+        # send the message to the directory node
+        self.directorySocket.send(message.encode())
+
+        # receive the directory from the directory node
+        directory = pickle.loads(self.directorySocket.recv(1024))
+
+        # close the connection to the directory node
+        self.directorySocket.close()
+
+        return directory
+
+    def run(self, dirNodeIP, dirNodePort):
+        directory = self.requestDirectory(dirNodeIP, dirNodePort)
         if self.debug:
-            print("Proxy node listening on port " + str(self.port))
-
+            print(directory)
         conn, addr = self.s.accept()
         with conn:
             print('Connected by', addr)
@@ -40,33 +58,22 @@ if __name__ == "__main__":
     parser.add_argument('-i', '--ip', type=str, default='127.0.0.1', help='ip address of the proxy node')
     # my port number
     parser.add_argument("-p", "--port", help="port number for the proxy node", type=int, default=8080)
-    # number of nodes
-    parser.add_argument("-n", "--nodes", help="number of nodes in the network", type=int, default=3)
     # debug mode
     parser.add_argument("-d", "--debug", help="enable debug mode", action="store_true")
+    # directory node port
+    parser.add_argument("-np", "--nodedirport", help="port number for the directory node", type=int, default=8081)
+    # directory node ip
+    parser.add_argument("-ni", "--nodedirip", help="ip address of the directory node", type=str, default="127.0.0.1")
 
     args = parser.parse_args()
     port = args.port
-    numNodes = args.nodes
     debug = args.debug
     ip = args.ip
+    dirIP = args.nodedirip
+    dirPort = args.nodedirport
 
-    # create a node port directory
-    nodeDirectory = set(range(port, port + numNodes))
-
-    # defug string
     if debug:
-        debugString = "--debug"
-    else:
-        debugString = ""
-    if numNodes > 0:
-        for i in range(numNodes):
-            if debug:
-                print("Starting proxy node on port " + str(port + i))
-            # run a console command
-            os.system("python3 proxyNode.py -p " + str(port + i) + " -n " + str(numNodes) + " " + debugString + " " + str(port + numNodes + 1) + " &")
-    else: 
         print("Starting directory node on port " + str(port))
 
-        dirNode = DirNode(port, numNodes, ip, debug)    
-        dirNode.run()
+    dirNode = ClientNode(port, ip, debug)    
+    dirNode.run(dirIP, dirPort)

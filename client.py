@@ -5,6 +5,7 @@ import argparse
 import os
 import socket
 import pickle
+import random
 
 class ClientNode:
 
@@ -37,18 +38,62 @@ class ClientNode:
 
         return directory
 
-    def run(self, dirNodeIP, dirNodePort):
+    def selectNode(self, directory, n):
+        # select n nodes from the directory randomly without replacement
+        nodeCopy = list(directory)
+        selectedNodes = []
+
+        for i in range(n):
+            #generate number from 0 to len(nodeCopy)
+            rand = int(len(nodeCopy) * (random.random()))
+            selectedNodes.append(nodeCopy[rand])
+            nodeCopy.pop(rand)
+        
+        return selectedNodes
+
+    def parseMessage(self, incoming):
+        delimiter = ","
+        terminate = "\r\r"
+        successString = "succ"
+        failString = "fail"
+
+        # split the message into a list
+        message = incoming.decode().split(",")
+
+        # remove the terminator from the message
+        message.pop()
+
+        action = message[0]
+
+        if action == successString:
+            return True
+        elif action == failString:
+            return False
+        else: # pass the entire message
+            return message
+
+
+
+    def run(self, dirNodeIP, dirNodePort, n):
         directory = self.requestDirectory(dirNodeIP, dirNodePort)
+        selectedNodes = self.selectNode(directory, n)
+
+
         if self.debug:
-            print(directory)
-        conn, addr = self.s.accept()
-        with conn:
-            print('Connected by', addr)
-            while True:
-                data = conn.recv(1024)
-                if not data:
-                    break
-                conn.sendall(data)
+            print("Selected nodes: " + str(selectedNodes))
+
+       # connect to the first node
+        self.nodeSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            self.nodeSocket.connect((selectedNodes[0][0], selectedNodes[0][1]))
+        except:
+            if self.debug:
+                print("Could not connect to node " + str(selectedNodes[0][0]) + ":" + str(selectedNodes[0][1]))
+            return
+        
+        for nodes in selectedNodes[1:]:
+            # each proxy node will connect to the next node in the list
+            message = "conn," + nodes[0] + "," + str(nodes[1]) + "\r\r"
 
 
 
@@ -64,6 +109,8 @@ if __name__ == "__main__":
     parser.add_argument("-np", "--nodedirport", help="port number for the directory node", type=int, default=8081)
     # directory node ip
     parser.add_argument("-ni", "--nodedirip", help="ip address of the directory node", type=str, default="127.0.0.1")
+    # Number of nodes
+    parser.add_argument("-n", "--numnodes", type=int, default=1, help="number of nodes to chain")
 
     args = parser.parse_args()
     port = args.port
@@ -71,9 +118,10 @@ if __name__ == "__main__":
     ip = args.ip
     dirIP = args.nodedirip
     dirPort = args.nodedirport
+    numNodes = args.numnodes
 
     if debug:
         print("Starting directory node on port " + str(port))
 
     dirNode = ClientNode(port, ip, debug)    
-    dirNode.run(dirIP, dirPort)
+    dirNode.run(dirIP, dirPort, numNodes)

@@ -11,7 +11,8 @@ class ProxyNode:
         self.port = port
         self.debug = debug
         self.host = ip
-
+        self.chains = {}
+        self.connections = []
 
     def register(self, port, ip):
         register = "reg"
@@ -40,8 +41,91 @@ class ProxyNode:
         self.directorySocket.close()
         return
 
-    def incomingMessage(self):
-        pass
+    def incomingMessage(self, data, conn):
+        connect = "conn" # add the provided node's connection to the chain
+        exitNode  = "fin" # register my connection but dont add anything to my chain (exit node)
+        forward = "forw" # forward a message to the next node or provided ip and port
+        delimiter = "," # delimiter for the message
+        terminate = "\r\r" # terminate the message
+        successString = "succ" # success message
+        failString = "fail" # failure message
+
+        message = data.decode()
+        message = message.split(delimiter)
+        # remove the null byte
+        message.pop()
+
+        action = message[0]
+
+        if action == connect:
+            # retrive the ip and port of the node to connect to
+            ip = message[1]
+            port = int(message[2])
+
+            # connect to the node
+            nextNode = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            try:
+                nextNode.connect((ip, port))
+
+                # add the new connection to the list of connections
+                self.connections.append(conn)
+                # add a empty chain to the list of chains with the new connection
+                self.chains[conn] = []
+                # add the new connection to the chain of the current connection
+                self.chains[conn].append(nextNode)
+
+            except:
+                if self.debug:
+                    print("Could not connect to node " + str(ip) + ":" + str(port))
+                conn.send(failString.encode())
+                conn.send(delimiter.encode())
+                conn.send(terminate.encode())
+
+                return
+
+            # send a response to the client
+            conn.send(successString.encode())
+            conn.send(delimiter.encode())
+            conn.send(terminate.encode())
+        elif action == forward:
+            # forward the message to the next node in the chain
+            nextNode = self.chains[conn][0]
+            
+            # if I am the last node in the chain, send the message to the destination and wait for a response
+            if len(self.chains[conn]) == 0:
+                nextNode.send(data)
+                
+                # collect the response till the end of the message
+                response = b''
+                while True:
+                    data = nextNode.recv(1024)
+                    if not data:
+                        break
+                    response += data
+                
+                # send the response to the client
+                conn.send(response)
+                return
+            else:
+                # forward the message to the next node in the chain
+                nextNode.send(data)
+
+                # wait for a response
+                response = b''
+                while True:
+                    data = nextNode.recv(1024)
+                    if not data:
+                        break
+                    response += data
+                
+                # send the response to the client
+                conn.send(response)
+                return
+
+        elif action == exitNode:
+            # register the connection but dont add anything to the chain
+            self.connections.append(conn)
+            self.chains[conn] = []
 
     def outgoingMessage(self):
         pass
@@ -63,6 +147,7 @@ class ProxyNode:
             with conn:
                 if self.debug:
                     print('Connected by', addr)
+
                 while True:
                     data = conn.recv(1024)
                     if not data:

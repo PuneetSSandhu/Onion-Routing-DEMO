@@ -2,22 +2,37 @@
 A proxy node object.
 """
 
+from multiprocessing.pool import TERMINATE
 import socket
 import argparse
-import pickle
+import json
+import threading
 
+CRLF = b"\r\n"
+END = CRLF + CRLF
+
+class ProxyClient:
+    def __init__(self, connection, debug):
+        self.connection = connection
+        self.debug = debug
+        self.id = None
+        self.nextNode = None
+    
+    def setNextNode(self, nextNode):
+        self.nextNode = nextNode
+    
+    def setId(self, id):
+        self.id = id
+    
 class ProxyNode:
     def __init__(self, port, ip, debug):
         self.port = port
         self.debug = debug
         self.host = ip
-        self.chains = {}
-        self.connections = []
+        self.clientList = []
 
     def register(self, port, ip):
-        register = "reg"
-        delimiter = ","
-        terminate = "\r\r"
+
         # connect to the directory node
         self.directorySocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.directorySocket.connect((ip, port))
@@ -29,103 +44,86 @@ class ProxyNode:
             exit(1)
 
         # send the port number and ip address to the directory node
-        self.directorySocket.send(register.encode())
-        self.directorySocket.send(delimiter.encode())
-        self.directorySocket.send(self.host.encode())
-        self.directorySocket.send(delimiter.encode())
-        self.directorySocket.send(str(self.port).encode())
-        self.directorySocket.send(delimiter.encode())
-        self.directorySocket.send(terminate.encode())
+        packet = {
+            "action": "register",
+            "port": self.port,
+            "ip": self.host
+        }
+        self.directorySocket.send(json.dumps(packet).encode())
+        self.directorySocket.send(END)
 
         # disconnect from the directory node
         self.directorySocket.close()
         return
 
-    def incomingMessage(self, data, conn):
-        connect = "conn" # add the provided node's connection to the chain
-        exitNode  = "fin" # register my connection but dont add anything to my chain (exit node)
-        forward = "forw" # forward a message to the next node or provided ip and port
-        delimiter = "," # delimiter for the message
-        terminate = "\r\r" # terminate the message
-        successString = "succ" # success message
-        failString = "fail" # failure message
+    def parseMessage(self, message):
+        message  = message.replace(END, "")
+        message = message.decode()
+        message = json.loads(message)
 
-        message = data.decode()
-        message = message.split(delimiter)
-        # remove the null byte
-        message.pop()
+        if message["action"] == "setNextNode":
+            # save the next node ip and port
+            nextNodeIP = message["ip"]
+            nextNodePort = message["port"]
+            id = message["id"]
+            # return the next node
+            return (nextNodeIP, nextNodePort), id
+        elif message["action"] == "forward":
+            # get the id of the client
+            id = message["id"]
+            # get the message
+            message = message["message"]
+            # get the next node
+            nextNode = self.clientList[id].nextNode
+            # send the message to the next node
+            self.clientList[id].connection.send(message.encode())
+            self.clientList[id].connection.send(END)
+            # return the next node
+            return nextNode
 
-        action = message[0]
-
-        if action == connect:
-            # retrive the ip and port of the node to connect to
-            ip = message[1]
-            port = int(message[2])
-
-            # connect to the node
-            nextNode = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            try:
-                nextNode.connect((ip, port))
-
-                # add the new connection to the list of connections
-                self.connections.append(conn)
-                # add a empty chain to the list of chains with the new connection
-                self.chains[conn] = []
-                # add the new connection to the chain of the current connection
-                self.chains[conn].append(nextNode)
-
-            except:
-                if self.debug:
-                    print("Could not connect to node " + str(ip) + ":" + str(port))
-                conn.send(failString.encode())
-                conn.send(delimiter.encode())
-                conn.send(terminate.encode())
-
-                return
-
-            # send a response to the client
-            conn.send(successString.encode())
-            conn.send(delimiter.encode())
-            conn.send(terminate.encode())
-        elif action == forward:
-            # forward the message to the next node in the chain
-            nextNode = self.chains[conn][0]
+    def intakeMessage(self, connection):
             
-            # if I am the last node in the chain, send the message to the destination and wait for a response
-            if len(self.chains[conn]) == 0:
-                nextNode.send(data)
-                
-                # collect the response till the end of the message
-                response = b''
-                while True:
-                    data = nextNode.recv(1024)
-                    if not data:
-                        break
-                    response += data
-                
-                # send the response to the client
-                conn.send(response)
-                return
+            incoming = connection.recv(1024)
+    
+            while END not in incoming:
+                incoming += connection.recv(1024)
+    
+            if self.debug:
+                print("Incoming message: " + incoming.decode())
+    
+            return self.parseMessage(incoming)
+
+    def handleClient(self, client):
+        # get the next node from the client
+
+        nextNode, id = client.intakeMessage()
+
+        # if the next node is not None
+        if nextNode:
+            # set the next node for the client
+            client.setNextNode(nextNode)
+            # set the id of the client
+            client.setId(len(self.clientList) - 1)
+
+            # if the next node is not the directory node
+            if nextNode != (self.dirNodeIP, self.dirNodePort):
+                # connect to the next node
+                client.connection.connect(nextNode)
+
+                # send the client id to the next node
+                client.connection.send(json.dumps({"action": "id", "id": client.id}).encode())
+                client.connection.send(END)
+
+                # start a new thread to handle the client
+                thread = threading.Thread(target=self.handleClient, args=(client,))
+                thread.start()
             else:
-                # forward the message to the next node in the chain
-                nextNode.send(data)
+                # start a new thread to handle the client
+                thread = threading.Thread(target=self.handleClient, args=(client,))
+                thread.start()
 
-                # wait for a response
-                response = b''
-                while True:
-                    data = nextNode.recv(1024)
-                    if not data:
-                        break
-                    response += data
-                
-                # send the response to the client
-                conn.send(response)
-                return
-
-        elif action == exitNode:
-            # register the connection but dont add anything to the chain
-            self.connections.append(conn)
-            self.chains[conn] = []
+    def incomingMessage(self):
+        pass
 
     def outgoingMessage(self):
         pass
@@ -136,6 +134,10 @@ class ProxyNode:
 
         # register with the directory node
         self.register(dirNodePort, dirNodeIP)
+
+        # save the directory node ip and port
+        self.dirNodeIP = dirNodeIP
+        self.dirNodePort = dirNodePort
         # start a socket listening for incoming connections
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.s.bind((self.host, self.port))
@@ -143,16 +145,18 @@ class ProxyNode:
 
         # accept connections forever
         while True:
-            conn, addr = self.s.accept()
-            with conn:
-                if self.debug:
-                    print('Connected by', addr)
+            # accept a connection
+            connection, address = self.s.accept()
 
-                while True:
-                    data = conn.recv(1024)
-                    if not data:
-                        break
-                    conn.sendall(data)
+            # create a new client object
+            client = ProxyClient(connection, self.debug)
+
+            # add the client to the client list
+            self.clientList.append(client)
+
+            # start a new thread to handle the client
+            thread = threading.Thread(target=self.handleClient, args=(client,))
+           
     
 
 # take in command line arguments

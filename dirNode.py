@@ -4,7 +4,10 @@ Launches a directory node
 import argparse
 import os
 import socket
-import pickle
+import json
+
+CRLF = b"\r\n"
+END = CRLF + CRLF
 
 class DirNode:
 
@@ -13,18 +16,17 @@ class DirNode:
         self.numNodes = numNodes
         self.debug = debug
         self.host = ip
-        self.dir = set()
+        self.dir = []
 
         # start a socket listening for incoming connections
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.s.bind((self.host, self.port))
         self.s.listen()
-        self.nodeDirectory = nodeDirectory
 
-    def register(self, incoming):
-        ip = incoming[1]
-        port = int(incoming[2])
-        self.dir.add((ip, port))
+    def register(self, message):
+        ip = message["ip"]
+        port = int(message["port"])
+        self.dir.append((ip, port))
 
     def run(self):
         if self.debug:
@@ -39,32 +41,41 @@ class DirNode:
                     # receive data from the client until the client send a null byte
                     incoming = conn.recv(1024)
                     message = incoming.decode()
-
-                    while message.split(",")[-1] != "\r\r":
-                        incoming = conn.recv(1024)
+                    while END.decode() not in message:
                         message += incoming.decode()
-                    
-                    # parse the message
-                    message = message.split(",")
-                    # remove the null byte
-                    message.pop()
+                        incoming = conn.recv(1024)
 
-                    if message[0] == "req": # request for node directory
+                    # remove the END from the message
+                    message = message.replace(END.decode(), "")
+                    
+                    # the packet in a python dictionary
+                    message = json.loads(message)
+                    if message["action"] == "request": # request for node directory
                         # send the list of nodes to the client
-                        conn.send(pickle.dumps(self.dir))
-                        conn.send(",\0".encode())
+                        if self.debug:
+                            print("Sending directory to client : " + str(self.dir))
+                        packet = {
+                            "action": "directory",
+                            "nodes": self.dir
+                        }
+                        conn.send(json.dumps(packet).encode())
+                        conn.send(END)
+
                         if self.debug:
                             print("Sent node directory")
-                    elif message[0] == "reg": # register a node
-                        self.register(message)
+                    elif message["action"] == "register": # register a node
+                        # check if all the required keys are present
+                        if "ip" in message and "port" in message:
+                            self.register(message)
+                        else:
+                            if self.debug:
+                                print("Invalid registration message")
                         if self.debug:
-                            print("Registered node: " + str(message[1]) + ":" + str(message[2]))
+                            print("Registered node: " + message["ip"] + ":" + str(message["port"]))
                     else:
                         if self.debug:
                             print("Unknown message received: " + message)
                     break
-
-
 
 
 if __name__ == "__main__":
@@ -83,9 +94,6 @@ if __name__ == "__main__":
     numNodes = args.nodes
     debug = args.debug
     ip = args.ip
-
-    # create a node port directory
-    nodeDirectory = set()
 
     # defug string
     if debug:

@@ -4,8 +4,12 @@ Launches a specified number of nodes
 import argparse
 import os
 import socket
-import pickle
 import random
+import json
+import uuid
+
+CRLF = b"\r\n"
+END = CRLF + CRLF
 
 class ClientNode:
 
@@ -13,11 +17,38 @@ class ClientNode:
         self.port = port
         self.debug = debug
         self.host = ip
+        self.id = uuid.uuid4()
 
         # start a socket listening for incoming connections
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.s.bind((self.host, self.port))
         self.s.listen()
+
+    def parseMessage(self, incoming):
+        # remove the END from the message
+        incoming = incoming.decode().replace(END.decode(), "")
+        packet = json.loads(incoming)
+
+        if packet["action"] == "directory":
+            # the packet in a python dictionary
+            return packet["nodes"]
+        elif packet["action"] == "conn":
+            return packet["ip"], int(packet["port"])
+        else:
+            return None
+
+    def intakeMessage(self, connection):
+
+        incoming = connection.recv(1024)
+
+        while END not in incoming:
+            incoming += connection.recv(1024)
+
+        if self.debug:
+            print("Incoming message: " + incoming.decode())
+    
+        return self.parseMessage(incoming)
+        
 
     def requestDirectory(self, dirNodeIP, dirNodePort):
         # connect to the directory node
@@ -25,13 +56,16 @@ class ClientNode:
         self.directorySocket.connect((dirNodeIP, dirNodePort))
 
         # for a message to request the directory
-        message = "req,\r\r"
+        message = {
+            "action": "request"
+        }
 
         # send the message to the directory node
-        self.directorySocket.send(message.encode())
+        self.directorySocket.send(json.dumps(message).encode())
+        self.directorySocket.send(END)
 
         # receive the directory from the directory node
-        directory = pickle.loads(self.directorySocket.recv(1024))
+        directory = self.intakeMessage(self.directorySocket)
 
         # close the connection to the directory node
         self.directorySocket.close()
@@ -40,44 +74,25 @@ class ClientNode:
 
     def selectNode(self, directory, n):
         # select n nodes from the directory randomly without replacement
-        nodeCopy = list(directory)
+        nodeCopy = directory.copy()
         selectedNodes = []
 
         for i in range(n):
             #generate number from 0 to len(nodeCopy)
             rand = int(len(nodeCopy) * (random.random()))
-            selectedNodes.append(nodeCopy[rand])
+            selectedNodes.append((nodeCopy[rand][0],nodeCopy[rand][1]))
             nodeCopy.pop(rand)
         
         return selectedNodes
 
-    def parseMessage(self, incoming):
-        delimiter = ","
-        terminate = "\r\r"
-        successString = "succ"
-        failString = "fail"
-
-        # split the message into a list
-        message = incoming.decode().split(",")
-
-        # remove the terminator from the message
-        message.pop()
-
-        action = message[0]
-
-        if action == successString:
-            return True
-        elif action == failString:
-            return False
-        else: # pass the entire message
-            return message
-
-
-
     def run(self, dirNodeIP, dirNodePort, n):
+        # get the directory from the directory node
         directory = self.requestDirectory(dirNodeIP, dirNodePort)
+        if n > len(directory):
+            print("Number of nodes requested is greater than the number of nodes in the directory")
+            exit(1)
+        
         selectedNodes = self.selectNode(directory, n)
-
 
         if self.debug:
             print("Selected nodes: " + str(selectedNodes))
@@ -90,12 +105,39 @@ class ClientNode:
             if self.debug:
                 print("Could not connect to node " + str(selectedNodes[0][0]) + ":" + str(selectedNodes[0][1]))
             return
-        
-        for nodes in selectedNodes[1:]:
-            # each proxy node will connect to the next node in the list
-            message = "conn," + nodes[0] + "," + str(nodes[1]) + "\r\r"
 
-
+        for node in selectedNodes:
+            # number of wrappers is index(node) - 1
+            payload = None
+            # check if the node is the last node
+            if node == selectedNodes[-1]:
+                payload = {
+                    "action": "setNextNode",
+                    "id": self.id,
+                    "type" : 1
+                }
+            else:
+                payload = {
+                    "action": "setNextNode",
+                    "id": self.id,
+                    "ip": node[0],
+                    "port": node[1],
+                    "type" : 0
+                }
+            
+            # create wrapper message
+            for i in range(selectedNodes.index(node)):
+                message = payload.copy()
+                payload = {
+                    "action": "forward",
+                    "id": self.id,
+                    "payload": message
+                }
+            if self.debug:
+                print("\n\n------------------------------------------------------\n\n")
+                print("Sending message: " + str(payload))
+            
+            # TODO: Negotiate the secret key
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Run n proxy nodes.')

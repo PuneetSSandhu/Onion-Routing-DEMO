@@ -1,12 +1,14 @@
 """
 Launches a specified number of nodes
 """
+
 import argparse
 import os
 import socket
 import random
 import json
 import uuid
+import signal
 
 CRLF = b"\r\n"
 END = CRLF + CRLF
@@ -17,12 +19,20 @@ class ClientNode:
         self.port = port
         self.debug = debug
         self.host = ip
-        self.id = uuid.uuid4()
+        self.id = str(uuid.uuid4())
+        self.keys = []
 
         # start a socket listening for incoming connections
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.s.bind((self.host, self.port))
         self.s.listen()
+
+    def signalCleaner(self, signum, frame):
+        if self.debug:
+            print("Cleaning up")
+        self.nodeSocket.close()
+        self.s.close()
+        exit(0)
 
     def parseMessage(self, incoming):
         # remove the END from the message
@@ -34,6 +44,10 @@ class ClientNode:
             return packet["nodes"]
         elif packet["action"] == "conn":
             return packet["ip"], int(packet["port"])
+        elif packet["action"] == "confirm":
+            return True
+        elif packet["action"] == "fail":
+            return False
         else:
             return None
 
@@ -53,7 +67,12 @@ class ClientNode:
     def requestDirectory(self, dirNodeIP, dirNodePort):
         # connect to the directory node
         self.directorySocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.directorySocket.connect((dirNodeIP, dirNodePort))
+        try:
+            self.directorySocket.connect((dirNodeIP, dirNodePort))
+        except:
+            if self.debug:
+                print("Could not connect to directory node " + str(dirNodeIP) + ":" + str(dirNodePort))
+            exit(1)
 
         # for a message to request the directory
         message = {
@@ -86,6 +105,7 @@ class ClientNode:
         return selectedNodes
 
     def run(self, dirNodeIP, dirNodePort, n):
+        signal.signal(signal.SIGINT, self.signalCleaner)
         # get the directory from the directory node
         directory = self.requestDirectory(dirNodeIP, dirNodePort)
         if n > len(directory):
@@ -106,11 +126,12 @@ class ClientNode:
                 print("Could not connect to node " + str(selectedNodes[0][0]) + ":" + str(selectedNodes[0][1]))
             return
 
-        for node in selectedNodes:
+        selectedNodes.append(None)
+        for node in selectedNodes[1:]:
             # number of wrappers is index(node) - 1
             payload = None
             # check if the node is the last node
-            if node == selectedNodes[-1]:
+            if node == None:
                 payload = {
                     "action": "setNextNode",
                     "id": self.id,
@@ -126,7 +147,7 @@ class ClientNode:
                 }
             
             # create wrapper message
-            for i in range(selectedNodes.index(node)):
+            for i in range(selectedNodes.index(node)-1):
                 message = payload.copy()
                 payload = {
                     "action": "forward",
@@ -136,9 +157,22 @@ class ClientNode:
             if self.debug:
                 print("\n\n------------------------------------------------------\n\n")
                 print("Sending message: " + str(payload))
-            
+
+            # send the message to the node
+            self.nodeSocket.send(json.dumps(payload).encode())
+            self.nodeSocket.send(END)
+
             # TODO: Negotiate the secret key
 
+            # wait for a reply from the node
+            reply = self.intakeMessage(self.nodeSocket)
+
+            if not reply:
+                print("No reply from node")
+                # exit(1)
+
+        # TODO: Listen for incoming messages
+        
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Run n proxy nodes.')
     # my host 

@@ -5,6 +5,7 @@ import argparse
 import os
 import socket
 import json
+import signal
 
 CRLF = b"\r\n"
 END = CRLF + CRLF
@@ -20,8 +21,14 @@ class DirNode:
 
         # start a socket listening for incoming connections
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.s.bind((self.host, self.port))
+        self.s.bind((ip, port))
         self.s.listen()
+
+    def signalCleaner(self, signum, frame):
+        if self.debug:
+            print("Cleaning up")
+        self.s.close()
+        exit(0)
 
     def register(self, message):
         ip = message["ip"]
@@ -29,6 +36,7 @@ class DirNode:
         self.dir.append((ip, port))
 
     def run(self):
+        signal.signal(signal.SIGINT, self.signalCleaner)
         if self.debug:
             print("Directory Node listening on port " + str(self.port))
         # listen for incoming connections forever

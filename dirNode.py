@@ -33,6 +33,11 @@ class DirNode:
     def register(self, message):
         ip = message["ip"]
         port = int(message["port"])
+        # check if the node is already registered
+        for node in self.dir:
+            if node[0] == ip and node[1] == port:
+                return
+        # add the node to the directory
         self.dir.append((ip, port))
 
     def run(self):

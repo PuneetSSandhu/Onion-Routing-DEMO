@@ -7,19 +7,18 @@ import os
 import socket
 import random
 import json
-import uuid
 import signal
 
 CRLF = b"\r\n"
 END = CRLF + CRLF
 
+
 class ClientNode:
 
-    def __init__ (self, port, ip, debug):
+    def __init__(self, port, ip, debug):
         self.port = port
         self.debug = debug
         self.host = ip
-        self.id = str(uuid.uuid4())
         self.keys = []
 
         # start a socket listening for incoming connections
@@ -53,25 +52,31 @@ class ClientNode:
 
     def intakeMessage(self, connection):
 
-        incoming = connection.recv(1024)
+        try:
+            incoming = connection.recv(1024)
 
-        while END not in incoming:
-            incoming += connection.recv(1024)
+            while END not in incoming:
+                incoming += connection.recv(1024)
 
-        if self.debug:
-            print("Incoming message: " + incoming.decode())
-    
-        return self.parseMessage(incoming)
-        
+            if self.debug:
+                print("Incoming message: " + incoming.decode())
+
+            return self.parseMessage(incoming)
+        except:
+            if self.debug:
+                print("Error receiving message")
+            return None
 
     def requestDirectory(self, dirNodeIP, dirNodePort):
         # connect to the directory node
-        self.directorySocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.directorySocket = socket.socket(
+            socket.AF_INET, socket.SOCK_STREAM)
         try:
             self.directorySocket.connect((dirNodeIP, dirNodePort))
         except:
             if self.debug:
-                print("Could not connect to directory node " + str(dirNodeIP) + ":" + str(dirNodePort))
+                print("Could not connect to directory node " +
+                      str(dirNodeIP) + ":" + str(dirNodePort))
             exit(1)
 
         # for a message to request the directory
@@ -97,11 +102,11 @@ class ClientNode:
         selectedNodes = []
 
         for i in range(n):
-            #generate number from 0 to len(nodeCopy)
+            # generate number from 0 to len(nodeCopy)
             rand = int(len(nodeCopy) * (random.random()))
-            selectedNodes.append((nodeCopy[rand][0],nodeCopy[rand][1]))
+            selectedNodes.append((nodeCopy[rand][0], nodeCopy[rand][1]))
             nodeCopy.pop(rand)
-        
+
         return selectedNodes
 
     def run(self, dirNodeIP, dirNodePort, n):
@@ -109,9 +114,10 @@ class ClientNode:
         # get the directory from the directory node
         directory = self.requestDirectory(dirNodeIP, dirNodePort)
         if n > len(directory):
-            print("Number of nodes requested is greater than the number of nodes in the directory")
+            print(
+                "Number of nodes requested is greater than the number of nodes in the directory")
             exit(1)
-        
+
         selectedNodes = self.selectNode(directory, n)
 
         if self.debug:
@@ -123,7 +129,8 @@ class ClientNode:
             self.nodeSocket.connect((selectedNodes[0][0], selectedNodes[0][1]))
         except:
             if self.debug:
-                print("Could not connect to node " + str(selectedNodes[0][0]) + ":" + str(selectedNodes[0][1]))
+                print("Could not connect to node " +
+                      str(selectedNodes[0][0]) + ":" + str(selectedNodes[0][1]))
             return
 
         selectedNodes.append(None)
@@ -134,24 +141,21 @@ class ClientNode:
             if node == None:
                 payload = {
                     "action": "setNextNode",
-                    "id": self.id,
-                    "type" : 1
+                    "type": 1
                 }
             else:
                 payload = {
                     "action": "setNextNode",
-                    "id": self.id,
                     "ip": node[0],
                     "port": node[1],
-                    "type" : 0
+                    "type": 0
                 }
-            
+
             # create wrapper message
             for i in range(selectedNodes.index(node)-1):
                 message = payload.copy()
                 payload = {
                     "action": "forward",
-                    "id": self.id,
                     "payload": message
                 }
             if self.debug:
@@ -169,24 +173,31 @@ class ClientNode:
 
             if not reply:
                 print("No reply from node")
-                # exit(1)
+                exit(1)
 
         # TODO: Listen for incoming messages
-        
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Run n proxy nodes.')
-    # my host 
-    parser.add_argument('-i', '--ip', type=str, default='127.0.0.1', help='ip address of the proxy node')
+    # my host
+    parser.add_argument('-i', '--ip', type=str,
+                        default='127.0.0.1', help='ip address of the proxy node')
     # my port number
-    parser.add_argument("-p", "--port", help="port number for the proxy node", type=int, default=8080)
+    parser.add_argument(
+        "-p", "--port", help="port number for the proxy node", type=int, default=8080)
     # debug mode
-    parser.add_argument("-d", "--debug", help="enable debug mode", action="store_true")
+    parser.add_argument(
+        "-d", "--debug", help="enable debug mode", action="store_true")
     # directory node port
-    parser.add_argument("-np", "--nodedirport", help="port number for the directory node", type=int, default=8081)
+    parser.add_argument("-np", "--nodedirport",
+                        help="port number for the directory node", type=int, default=8081)
     # directory node ip
-    parser.add_argument("-ni", "--nodedirip", help="ip address of the directory node", type=str, default="127.0.0.1")
+    parser.add_argument(
+        "-ni", "--nodedirip", help="ip address of the directory node", type=str, default="127.0.0.1")
     # Number of nodes
-    parser.add_argument("-n", "--numnodes", type=int, default=1, help="number of nodes to chain")
+    parser.add_argument("-n", "--numnodes", type=int,
+                        default=1, help="number of nodes to chain")
 
     args = parser.parse_args()
     port = args.port
@@ -199,5 +210,5 @@ if __name__ == "__main__":
     if debug:
         print("Starting directory node on port " + str(port))
 
-    dirNode = ClientNode(port, ip, debug)    
+    dirNode = ClientNode(port, ip, debug)
     dirNode.run(dirIP, dirPort, numNodes)

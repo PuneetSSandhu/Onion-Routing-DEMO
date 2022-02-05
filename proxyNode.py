@@ -5,11 +5,11 @@ A proxy node object.
 import socket
 import argparse
 import json
-import threading
 import signal
 
 CRLF = b"\r\n"
 END = CRLF + CRLF
+
 
 class ProxyClient:
     def __init__(self, connection, debug):
@@ -17,18 +17,18 @@ class ProxyClient:
         self.debug = debug
         self.id = None
         self.nextNode = None
-    
+
     def setNextNode(self, nextNode):
         # new socket to the next node
-        self.nextNode  = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.nextNode.connect((nextNode[0], nextNode[1]))
+        self.nextNode = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
     def setId(self, id):
         self.id = id
-    
-class ProxyNode:
-    def __init__(self, port, ip, debug):
 
+
+class ProxyNode:
+
+    def __init__(self, port, ip, debug):
         self.port = port
         self.debug = debug
         self.host = ip
@@ -43,17 +43,15 @@ class ProxyNode:
         exit(1)
 
     def register(self, port, ip):
-
         # connect to the directory node
-        self.directorySocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.directorySocket = socket.socket(
+            socket.AF_INET, socket.SOCK_STREAM)
         self.directorySocket.connect((ip, port))
-
         # if can't connect to directory node, exit
         if not self.directorySocket:
             if self.debug:
                 print("Could not connect to directory node")
             exit(1)
-
         # send the port number and ip address to the directory node
         packet = {
             "action": "register",
@@ -62,16 +60,16 @@ class ProxyNode:
         }
         self.directorySocket.send(json.dumps(packet).encode())
         self.directorySocket.send(END)
-
         # disconnect from the directory node
         self.directorySocket.close()
         return
 
     def parseMessage(self, message, clientID):
+        if self.debug:
+            print("Parsing message")
         message = message.decode()
-        message  = message.replace(END.decode(), "")
+        message = message.replace(END.decode(), "")
         message = json.loads(message)
-
         if message["action"] == "setNextNode":
             # save the next node ip and port
             nodeType = message["type"]
@@ -83,57 +81,46 @@ class ProxyNode:
             else:
                 # this is the exit node
                 return None,  nodeType
-
         elif message["action"] == "forward":
             # get the message
             message = message["payload"]
-
             if self.debug:
                 print("Forwarding message: " + str(message))
-
             # TODO: forward the message to the next node as a string
             # convert message to json
             message = json.dumps(message)
-
             clientCon = self.clientList[clientID].connection
-
             # get the next node
             nextNode = self.clientList[clientID].nextNode
             # send the message to the next node
             nextNode.send(message.encode())
             # send the end to the next node
             nextNode.send(END)
-            
             # wait for the next node to respond
-            response = clientCon.recv(1024)
+            response = nextNode.recv(1024)
             while END not in response:
-                response += clientCon.recv(1024)
+                response += nextNode.recv(1024)
             response = response.decode()
             response = response.replace(END.decode(), "")
             response = json.loads(response)
-
+            if self.debug:
+                print("Response: " + str(response))
             # TODO: Encrpyt the response packet
             # send the response to the client
             clientCon.send(json.dumps(response).encode())
             clientCon.send(END)
 
     def intakeMessage(self, connection, clientID=None):
-            
-            incoming = connection.recv(1024)
-    
-            while END not in incoming:
-                incoming += connection.recv(1024)
-    
-            if self.debug:
-                print("Incoming message: " + incoming.decode())
-    
-            return self.parseMessage(incoming, clientID)
+        incoming = connection.recv(1024)
+        while END not in incoming:
+            incoming += connection.recv(1024)
+        if self.debug:
+            print("Incoming message: " + incoming.decode())
+        return self.parseMessage(incoming, clientID)
 
     def handleClient(self, client):
-
         if self.debug:
             print("Client connected")
-
         # get the next node from the client
         nextNode, nodeType = self.intakeMessage(client.connection, client.id)
         self.nodeType = nodeType
@@ -145,52 +132,40 @@ class ProxyNode:
                 print(f"Next node: {nextNode}")
                 print(f"My id: {client.id}")
                 print(f"Node type: {nodeType}")
-        
         # if the node is not an exit node
         if nextNode:
             # set the next node for the client
             client.setNextNode(nextNode)
-
             if self.debug:
-                print("Client " + str(client.id) + " connected to " + str(nextNode))
+                print("Client " + str(client.id) +
+                      " connected to " + str(nextNode))
 
-            # if the next node is not the directory node
-            if nextNode != (self.dirNodeIP, self.dirNodePort):
-                # connect to the next node
-                client.nextNode = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            try:
                 client.nextNode.connect(nextNode)
-
-                # send the client id to the next node
-                try:
-                    # send a confirmation to the client
-                    client.connection.send(json.dumps({"action": "confirm"}).encode())
-                    client.connection.send(END)
-
-                except:
-                    if self.debug:
-                        print("Could not connect to next node")
-                    
-                    # send a failure to the client
-                    client.connection.send(json.dumps({"action": "failure"}).encode())
-                    client.connection.send(END)
-
-                    # close the connection
-                    client.connection.close()
-                    exit(1)
- 
-            else:
+                # send a confirmation to the client
+                client.connection.send(json.dumps(
+                    {"action": "confirm"}).encode())
+                client.connection.send(END)
+            except:
                 if self.debug:
-                    print("Not forwarding to directory node")
+                    print("Could not connect to next node")
+                # send a failure to the client
+                client.connection.send(json.dumps(
+                    {"action": "failure"}).encode())
+                client.connection.send(END)
+                # close the connection
+                client.connection.close()
                 exit(1)
+
         else:
             if self.debug:
-                print(f"Will relay to provided ip and port upon further forward requests")
-            
+                print(
+                    f"Will relay to provided ip and port upon further forward requests")
         # TODO: relay the message and forward response to the client connection
         while True:
             # intake the message
             message = self.intakeMessage(client.connection, client.id)
-        
+
     def run(self, dirNodeIP, dirNodePort):
         signal.signal(signal.SIGINT, self.signalCleaner)
 
@@ -221,27 +196,27 @@ class ProxyNode:
             # add the client to the client list
             self.clientList.append(client)
 
-            # start a new thread to handle the client
-            thread = threading.Thread(target=self.handleClient, args=(client, ))
+            self.handleClient(client)
 
-            # add the thread to the client
-            client.thread = thread
-
-            thread.start()
 
 # take in command line arguments
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Run n proxy nodes.')
-    # my host 
-    parser.add_argument('-i', '--ip', type=str, default='127.0.0.1', help='ip address of the proxy node')
+    # my host
+    parser.add_argument('-i', '--ip', type=str,
+                        default='127.0.0.1', help='ip address of the proxy node')
     # my port number
-    parser.add_argument("-p", "--port", help="port number for the proxy node", type=int, default=8080)
+    parser.add_argument(
+        "-p", "--port", help="port number for the proxy node", type=int, default=8080)
     # debug mode
-    parser.add_argument("-d", "--debug", help="enable debug mode", action="store_true")
+    parser.add_argument(
+        "-d", "--debug", help="enable debug mode", action="store_true")
     # directory node port
-    parser.add_argument("-np", "--nodedirport", help="port number for the directory node", type=int, default=8081)
+    parser.add_argument("-np", "--nodedirport",
+                        help="port number for the directory node", type=int, default=8081)
     # directory node ip
-    parser.add_argument("-ni", "--nodedirip", help="ip address of the directory node", type=str, default="127.0.0.1")
+    parser.add_argument(
+        "-ni", "--nodedirip", help="ip address of the directory node", type=str, default="127.0.0.1")
 
     args = parser.parse_args()
     port = args.port

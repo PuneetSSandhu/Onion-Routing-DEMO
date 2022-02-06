@@ -114,7 +114,9 @@ if __name__ == "__main__":
     else:
         debugString = ""
 
-    print("Starting directory node on port " + str(port))
+    localNetworkIP = os.popen("ip route | grep 'src' | awk '{print $9}'").read().strip()
+
+    print("Starting directory node on local IP " + localNetworkIP + ":" + str(port))
 
     dirNode = DirNode(port, numNodes, ip, debug)    
     try:

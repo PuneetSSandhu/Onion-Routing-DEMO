@@ -30,8 +30,8 @@ class DirNode:
         self.s.close()
         exit(0)
 
-    # TODO remove the ip from packet body
-    def register(self, message, ip):
+    def register(self, message):
+        ip = message["ip"]
         port = int(message["port"])
         # check if the node is already registered
         for node in self.dir:
@@ -79,7 +79,7 @@ class DirNode:
                     elif message["action"] == "register": # register a node
                         # check if all the required keys are present
                         if "ip" in message and "port" in message:
-                            self.register(message, conn.getsockname()[0])
+                            self.register(message)
                         else:
                             if self.debug:
                                 print("Invalid registration message")

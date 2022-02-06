@@ -228,6 +228,7 @@ class ProxyNode:
         # start a socket listening for incoming connections
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.s.bind(('', self.port))
+        self.host = socket.gethostname()[0]
         self.s.listen()
 
         # accept connections forever
@@ -249,9 +250,6 @@ class ProxyNode:
 # take in command line arguments
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Run n proxy nodes.')
-    # my host
-    parser.add_argument('-i', '--ip', type=str,
-                        default='127.0.0.1', help='ip address of the proxy node')
     # my port number
     parser.add_argument(
         "-p", "--port", help="port number for the proxy node", type=int, default=8080)
@@ -270,7 +268,8 @@ if __name__ == "__main__":
     debug = args.debug
     directoryPort = args.nodedirport
     directoryIp = args.nodedirip
-    host = args.ip
+    # always localhost
+    host = "127.0.0.1"
 
     print("Starting proxy node on port " + str(port))
 

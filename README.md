@@ -50,7 +50,7 @@ By default, Tor creates an onion route with 3 nodes between the client and the d
 
 ## Lab Help
 
-> Did ___ node stal or crash?
+> Did ___ node stall or crash?
 
 Of course it did! We expected this! Due to time constraints we were unable to set up all the error checking and proper port handling when unexpected behaviour or erros occur.
 

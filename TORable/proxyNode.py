@@ -128,6 +128,11 @@ class ProxyNode:
                 # send the message to the next node
                 self.clientList[clientID].nextNode.send(json.dumps(packet).encode())
                 self.clientList[clientID].nextNode.send(END)
+
+                # print the source ip and destination ip of the message
+                print(f"Source IP: {self.clientList[clientID].nextNode.getsockname()[0]}:{self.clientList[clientID].nextNode.getsockname()[1]}")
+                print(f"Destination IP: {self.clientList[clientID].nextNode.getpeername()[0]}:{self.clientList[clientID].nextNode.getpeername()[1]}")
+
         elif message["action"] == "key":
             p = 23
             g = 5

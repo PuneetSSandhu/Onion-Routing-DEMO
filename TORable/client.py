@@ -176,9 +176,8 @@ class ClientNode:
             exit(1)
 
         selectedNodes = self.selectNode(directory, n)
-
-        if self.debug:
-            print("Selected nodes: " + str(selectedNodes))
+        # print the circuit
+        print("Selected nodes: " + str(selectedNodes))
 
        # connect to the first node
         self.nodeSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -264,7 +263,7 @@ if __name__ == "__main__":
                         default='127.0.0.1', help='ip address of the proxy node')
     # my port number
     parser.add_argument(
-        "-p", "--port", help="port number for the proxy node", type=int, default=8080)
+        "-p", "--port", help="port number for the proxy node", type=int, default=8079)
     # debug mode
     parser.add_argument(
         "-d", "--debug", help="enable debug mode", action="store_true")
@@ -286,8 +285,7 @@ if __name__ == "__main__":
     dirPort = args.nodedirport
     numNodes = args.numnodes
 
-    if debug:
-        print("Starting directory node on port " + str(port))
+    print("Starting client node on port " + str(port))
 
     clientNode = ClientNode(port, ip, debug)
     try:

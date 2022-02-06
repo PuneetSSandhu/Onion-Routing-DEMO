@@ -2,7 +2,7 @@
 A demo of onion routing principals.
 
 ## The History of TOR
-* The idea of the Onion router was developed b the United States Naval Research Lab employees for use in protectred communications online for US intelligence
+* The idea of the Onion router was developed by the United States Naval Research Lab employees for use in protectred communications online for US intelligence
 * The TOR project was started in 2005 after the reseach lab released the code for TOR
 ## Use Cases of TOR
 * To browse the dark web

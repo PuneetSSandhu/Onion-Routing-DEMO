@@ -21,7 +21,7 @@ class DirNode:
 
         # start a socket listening for incoming connections
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.s.bind((ip, port))
+        self.s.bind(('', port))
         self.s.listen()
 
     def signalCleaner(self, signum, frame):
@@ -114,9 +114,7 @@ if __name__ == "__main__":
     else:
         debugString = ""
 
-    localNetworkIP = os.popen("ip route | grep 'src' | awk '{print $9}'").read().strip()
-
-    print("Starting directory node on local IP " + localNetworkIP + ":" + str(port))
+    print("Starting directory node on port: " + str(port))
 
     dirNode = DirNode(port, numNodes, ip, debug)    
     try:

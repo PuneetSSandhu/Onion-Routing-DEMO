@@ -227,7 +227,7 @@ class ProxyNode:
         self.dirNodePort = dirNodePort
         # start a socket listening for incoming connections
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.s.bind((self.host, self.port))
+        self.s.bind(('', self.port))
         self.s.listen()
 
         # accept connections forever

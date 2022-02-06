@@ -116,8 +116,10 @@ class ProxyNode:
             # get the message
             msg = self.decrypt(message["payload"], self.clientList[clientID].key)
             # if my node type is 1 then print the message
+
+            print(f"Incoming Message: {msg}")
             if self.nodeType == 1:
-                print(msg)
+                return
             else: # otherwise send the message with a message action
                 packet = {
                     "action": "message",

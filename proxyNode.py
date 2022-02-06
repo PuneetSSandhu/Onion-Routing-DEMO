@@ -228,7 +228,6 @@ class ProxyNode:
         # start a socket listening for incoming connections
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.s.bind(('', self.port))
-        self.host = socket.gethostname()[0]
         self.s.listen()
 
         # accept connections forever

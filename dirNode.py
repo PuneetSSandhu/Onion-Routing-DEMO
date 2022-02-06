@@ -30,8 +30,8 @@ class DirNode:
         self.s.close()
         exit(0)
 
-    def register(self, message):
-        ip = message["ip"]
+    # TODO: remove ip from packet structure
+    def register(self, message, ip):
         port = int(message["port"])
         # check if the node is already registered
         for node in self.dir:
@@ -79,12 +79,12 @@ class DirNode:
                     elif message["action"] == "register": # register a node
                         # check if all the required keys are present
                         if "ip" in message and "port" in message:
-                            self.register(message)
+                            self.register(message, addr[0])
                         else:
                             if self.debug:
                                 print("Invalid registration message")
                         if self.debug:
-                            print("Registered node: " + message["ip"] + ":" + str(message["port"]))
+                            print("Registered node: " + addr[0] + ":" + str(message["port"]))
                     else:
                         if self.debug:
                             print("Unknown message received: " + message)

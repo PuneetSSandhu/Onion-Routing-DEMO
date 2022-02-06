@@ -41,7 +41,11 @@ Start sending some messages and observe. Try running with different numbers of p
 ### Q1: Longer routes
 Try passing messages through longer onion routes (more proxy nodes). What do you notice about the latency?
 
-### Q2: How 
+### Q2: Message encryption
+Assume that the destination you are accessing doesn't support end-to-end encryption. When passing the message through the onion route, can any of the nodes see the direct message?
+
+### Q3: Deanonymizing
+By default, Tor creates an onion route with 3 nodes between the client and the destination. When passing a message through the onion relay, can any of the nodes determine both the source and destination of these messages?
 
 
 ## Lab Help
@@ -50,7 +54,7 @@ Try passing messages through longer onion routes (more proxy nodes). What do you
 
 Of course it did! We expected this! Due to time constraints we were unable to set up all the error checking and proper port handling when unexpected behaviour or erros occur.
 
-Just close all nodes and try again from the beginning.
+Just close all nodes and try again from the beginning using different ports.
 
 # Onion-Routing-DEMO
 A demo of onion routing principals.

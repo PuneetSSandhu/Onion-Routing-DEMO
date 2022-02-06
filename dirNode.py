@@ -113,17 +113,16 @@ if __name__ == "__main__":
         debugString = "--debug"
     else:
         debugString = ""
-    if numNodes > 0:
-        for i in range(numNodes):
-            if debug:
-                print("Starting proxy node on port " + str(port + i))
-            # run a console command
-            os.system("python3 proxyNode.py -p " + str(port + i) + " -n " + str(numNodes) + " " + debugString + " " + str(port + numNodes + 1) + " &")
-    else: 
-        print("Starting directory node on port " + str(port))
 
-        dirNode = DirNode(port, numNodes, ip, debug)    
+    print("Starting directory node on port " + str(port))
+
+    dirNode = DirNode(port, numNodes, ip, debug)    
+    try:
         dirNode.run()
+    except KeyboardInterrupt:
+        print("Cleaning up")
+        dirNode.s.close()
+        exit(0)
 
     
 

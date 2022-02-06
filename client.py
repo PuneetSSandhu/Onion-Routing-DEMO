@@ -1,13 +1,16 @@
 """
-Launches a specified number of nodes
+A client node
 """
 
+from cryptography.fernet import Fernet
 import argparse
 import os
 import socket
 import random
 import json
 import signal
+import sys
+import base64
 
 CRLF = b"\r\n"
 END = CRLF + CRLF
@@ -25,13 +28,6 @@ class ClientNode:
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.s.bind((self.host, self.port))
         self.s.listen()
-
-    def signalCleaner(self, signum, frame):
-        if self.debug:
-            print("Cleaning up")
-        self.nodeSocket.close()
-        self.s.close()
-        exit(0)
 
     def parseMessage(self, incoming):
         # remove the END from the message
@@ -109,8 +105,69 @@ class ClientNode:
 
         return selectedNodes
 
+    def encrypt(self, message, key):
+        Fkey = base64.urlsafe_b64encode(key.to_bytes(32, sys.byteorder))
+        f = Fernet(Fkey)
+        return f.encrypt(message.encode()).decode()
+
+    def wrapPacket(self, wrapDepth, packet):
+        if self.debug:
+            print("Wrapping packet")
+        wrapPacket = packet
+        for i in range(wrapDepth):
+            wrapPacket = {
+                "action": "forward",
+                "payload": self.encrypt(json.dumps(wrapPacket), self.keys[-i-1])
+            }
+        return wrapPacket
+
+    def negotiateKey(self, numWrappers):
+        # Alice and Bob publicly agree to use a modulus p = 23 and base g = 5 (which is a primitive root modulo 23).
+        p = 23
+        g = 5
+        # Alice chooses a secret integer a = 4, then sends Bob A = ga mod p
+        a = random.randint(1, p - 1)
+        #     A = 54 mod 23 = 4
+        A = pow(g, a, p)
+        if self.debug:
+            print("Alice's public key: " + str(A))
+
+        # from a packet to send to Bob
+        packet = {
+            "action": "key",
+            "A": A
+        }
+        # wrap the packet in numWrappers forwards
+        packet = self.wrapPacket(numWrappers, packet)
+        # send the packet to Bob
+        self.nodeSocket.send(json.dumps(packet).encode())
+        self.nodeSocket.send(END)
+        # Bob chooses a secret integer b = 3, then sends Alice B = gb mod p
+        #     B = 53 mod 23 = 10
+
+        # receive the packet from Bob
+
+        incoming = self.nodeSocket.recv(1024)
+
+        while END not in incoming:
+            incoming += self.nodeSocket.recv(1024)
+
+        # remove the END from the message
+        incoming = incoming.decode().replace(END.decode(), "")
+        packet = json.loads(incoming)
+        B = int(packet["B"])
+        if self.debug:
+            print("B: " + str(B))
+
+        s = pow(B, a, p)
+        if self.debug:
+            print("Shared Key: " + str(s))
+        # save the key
+
+        self.keys.append(s)
+        return
+
     def run(self, dirNodeIP, dirNodePort, n):
-        signal.signal(signal.SIGINT, self.signalCleaner)
         # get the directory from the directory node
         directory = self.requestDirectory(dirNodeIP, dirNodePort)
         if n > len(directory):
@@ -152,12 +209,8 @@ class ClientNode:
                 }
 
             # create wrapper message
-            for i in range(selectedNodes.index(node)-1):
-                message = payload.copy()
-                payload = {
-                    "action": "forward",
-                    "payload": message
-                }
+            numWrappers = selectedNodes.index(node)-1
+            payload = self.wrapPacket(numWrappers, payload)
             if self.debug:
                 print("\n\n------------------------------------------------------\n\n")
                 print("Sending message: " + str(payload))
@@ -166,8 +219,6 @@ class ClientNode:
             self.nodeSocket.send(json.dumps(payload).encode())
             self.nodeSocket.send(END)
 
-            # TODO: Negotiate the secret key
-
             # wait for a reply from the node
             reply = self.intakeMessage(self.nodeSocket)
 
@@ -175,11 +226,39 @@ class ClientNode:
                 print("No reply from node")
                 exit(1)
 
-        # TODO: Listen for incoming messages
+            # TODO: Negotiate the secret key
+
+            self.negotiateKey(numWrappers)
+
+        if self.debug:
+            print("\n\n------------------------------------------------------\n\n")
+            print("Keys: " + str(self.keys))
+            print("\n\n------------------------------------------------------\n\n")
+
+        while True:
+            message = input("Enter a message to send: ")
+
+            if message == "exit":
+                break
+            
+            # encrypt the message
+            for i in self.keys[::-1]:
+                message = self.encrypt(message, i)
+
+            # wrap the message in a wrapper message
+            payload = {
+                "action": "message",
+                "payload": message
+            }
+            # send the message to the node
+            self.nodeSocket.send(json.dumps(payload).encode())
+            self.nodeSocket.send(END)
+
+            # no need to wait for a reply from the node
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Run n proxy nodes.')
+    parser = argparse.ArgumentParser(description='Run a client nodes.')
     # my host
     parser.add_argument('-i', '--ip', type=str,
                         default='127.0.0.1', help='ip address of the proxy node')
@@ -210,5 +289,11 @@ if __name__ == "__main__":
     if debug:
         print("Starting directory node on port " + str(port))
 
-    dirNode = ClientNode(port, ip, debug)
-    dirNode.run(dirIP, dirPort, numNodes)
+    clientNode = ClientNode(port, ip, debug)
+    try:
+        clientNode.run(dirIP, dirPort, numNodes)
+    except KeyboardInterrupt:
+        print("\n\nExiting...")
+        # close the socket
+        clientNode.nodeSocket.close()
+        exit(0)

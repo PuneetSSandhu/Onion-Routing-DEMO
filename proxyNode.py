@@ -1,11 +1,14 @@
 """
-A proxy node object.
+A proxy node
 """
 
+from cryptography.fernet import Fernet
 import socket
 import argparse
 import json
-import signal
+import random
+import sys
+import base64
 
 CRLF = b"\r\n"
 END = CRLF + CRLF
@@ -17,6 +20,7 @@ class ProxyClient:
         self.debug = debug
         self.id = None
         self.nextNode = None
+        self.key = None
 
     def setNextNode(self, nextNode):
         # new socket to the next node
@@ -33,14 +37,6 @@ class ProxyNode:
         self.debug = debug
         self.host = ip
         self.clientList = []
-
-    def signalCleaner(self, signum, frame):
-        if self.debug:
-            print("Cleaning up")
-        for client in self.clientList:
-            client.connection.close()
-        self.directorySocket.close()
-        exit(1)
 
     def register(self, port, ip):
         # connect to the directory node
@@ -64,13 +60,20 @@ class ProxyNode:
         self.directorySocket.close()
         return
 
+    def decrypt(self, message, key):
+        # make key into a fernet key
+        Fkey = base64.urlsafe_b64encode(key.to_bytes(32, sys.byteorder))
+        f = Fernet(Fkey)
+        message = f.decrypt(message.encode())
+        return message.decode()
+
     def parseMessage(self, message, clientID):
         if self.debug:
             print("Parsing message")
         message = message.decode()
         message = message.replace(END.decode(), "")
         message = json.loads(message)
-        if message["action"] == "setNextNode":
+        if message["action"]== "setNextNode":
             # save the next node ip and port
             nodeType = message["type"]
             if nodeType == 0:
@@ -84,11 +87,11 @@ class ProxyNode:
         elif message["action"] == "forward":
             # get the message
             message = message["payload"]
+            # TODO: forward the message to the next node as a string
+            message = self.decrypt(message, self.clientList[clientID].key)
             if self.debug:
                 print("Forwarding message: " + str(message))
-            # TODO: forward the message to the next node as a string
             # convert message to json
-            message = json.dumps(message)
             clientCon = self.clientList[clientID].connection
             # get the next node
             nextNode = self.clientList[clientID].nextNode
@@ -109,6 +112,45 @@ class ProxyNode:
             # send the response to the client
             clientCon.send(json.dumps(response).encode())
             clientCon.send(END)
+        elif message["action"] == "message":
+            # get the message
+            msg = self.decrypt(message["payload"], self.clientList[clientID].key)
+            # if my node type is 1 then print the message
+            if self.nodeType == 1:
+                print(msg)
+            else: # otherwise send the message with a message action
+                packet = {
+                    "action": "message",
+                    "payload": msg
+                }
+                # send the message to the next node
+                self.clientList[clientID].nextNode.send(json.dumps(packet).encode())
+                self.clientList[clientID].nextNode.send(END)
+        elif message["action"] == "key":
+            p = 23
+            g = 5
+            # retrive the key from the message
+            A = int(message["A"])
+            if self.debug:
+                print("A: " + str(A))
+            # Bob chooses a secret integer b = 3, then sends Alice B = gb mod p
+            # B = 53 mod 23 = 10
+            b = random.randint(1, p-1)
+            B = pow(g, b, p)
+            if self.debug:
+                print("Bob's public key: " + str(B))
+            # send the key to the client
+            packet = {
+                "B": B
+            }
+            self.clientList[clientID].connection.send(json.dumps(packet).encode())
+            self.clientList[clientID].connection.send(END)
+            # compute the shared secret key
+            s = pow(A, b, p)
+            if self.debug:
+                print("Shared Key: " + str(s))
+            # save the key in the client object
+            self.clientList[clientID].key = s
 
     def intakeMessage(self, connection, clientID=None):
         incoming = connection.recv(1024)
@@ -156,18 +198,21 @@ class ProxyNode:
                 # close the connection
                 client.connection.close()
                 exit(1)
-
         else:
             if self.debug:
                 print(
                     f"Will relay to provided ip and port upon further forward requests")
+            # send a confirmation to the client
+            client.connection.send(json.dumps(
+                {"action": "confirm"}).encode())
+            client.connection.send(END)
+
         # TODO: relay the message and forward response to the client connection
         while True:
             # intake the message
             message = self.intakeMessage(client.connection, client.id)
 
     def run(self, dirNodeIP, dirNodePort):
-        signal.signal(signal.SIGINT, self.signalCleaner)
 
         if self.debug:
             print("Proxy node listening on port " + str(self.port))
@@ -229,4 +274,11 @@ if __name__ == "__main__":
 
     # create a proxy node
     proxyNode = ProxyNode(port, host, debug)
-    proxyNode.run(directoryIp, directoryPort)
+    try:
+        proxyNode.run(directoryIp, directoryPort)
+    except KeyboardInterrupt:
+        print("Exiting...")
+        # close the socket
+        proxyNode.s.close()
+        exit(0)
+

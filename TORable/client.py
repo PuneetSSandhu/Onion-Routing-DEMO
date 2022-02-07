@@ -49,7 +49,7 @@ class ClientNode:
     def debugNextStep(self):
         if self.debug:
             # take input from terminal
-            input("Continue? ")
+            #input("Continue? ")
             print("-------------------------------------------------------\n")
 
 
@@ -267,11 +267,11 @@ class ClientNode:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Run a client nodes.')
     # my host
-    parser.add_argument('-i', '--ip', type=str,
-                        default='127.0.0.1', help='ip address of the proxy node')
+    # parser.add_argument('-i', '--ip', type=str,
+    #                     default='127.0.0.1', help='ip address of the proxy node')
     # my port number
     parser.add_argument(
-        "-p", "--port", help="port number for the proxy node", type=int, default=8079)
+        "-p", "--port", help="port number for the client", type=int, default=8079)
     # debug mode
     parser.add_argument(
         "-d", "--debug", help="enable debug mode", action="store_true")
@@ -288,14 +288,14 @@ if __name__ == "__main__":
     args = parser.parse_args()
     port = args.port
     debug = args.debug
-    ip = args.ip
+    #ip = args.ip
     dirIP = args.nodedirip
     dirPort = args.nodedirport
     numNodes = args.numnodes
 
     print("Starting client node on port " + str(port))
 
-    clientNode = ClientNode(port, ip, debug)
+    clientNode = ClientNode(port, None, debug)
     try:
         clientNode.run(dirIP, dirPort, numNodes)
     except KeyboardInterrupt:

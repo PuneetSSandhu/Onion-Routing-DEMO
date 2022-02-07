@@ -97,14 +97,11 @@ if __name__ == "__main__":
     parser.add_argument('-i', '--ip', type=str, default='127.0.0.1', help='ip address of the proxy node')
     # my port number
     parser.add_argument("-p", "--port", help="port number for the proxy node", type=int, default=8081)
-    # number of nodes
-    parser.add_argument("-n", "--nodes", help="number of nodes in the network", type=int, default=0)
     # debug mode
     parser.add_argument("-d", "--debug", help="enable debug mode", action="store_true")
 
     args = parser.parse_args()
     port = args.port
-    numNodes = args.nodes
     debug = args.debug
     ip = args.ip
 
@@ -116,7 +113,7 @@ if __name__ == "__main__":
 
     print("Starting directory node on port: " + str(port))
 
-    dirNode = DirNode(port, numNodes, ip, debug)    
+    dirNode = DirNode(port, 0, ip, debug)    
     try:
         dirNode.run()
     except KeyboardInterrupt:

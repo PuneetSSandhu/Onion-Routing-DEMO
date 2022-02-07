@@ -39,7 +39,7 @@ Start sending some messages and observe. Try running with different numbers of p
 
 ## Lab Questions:
 ### Q1: Longer routes
-Try passing messages through longer onion routes (more proxy nodes). What do you notice about the latency?
+Try passing messages through longer onion routes (more proxy nodes). What do you notice about the latency? (Get a basic time reading, maybe add some time stamps in the code.)
 
 ### Q2: Message encryption
 Assume that the destination you are accessing doesn't support end-to-end encryption. When passing the message through the onion route, can any of the nodes see the direct message?

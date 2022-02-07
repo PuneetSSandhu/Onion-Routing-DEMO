@@ -46,6 +46,13 @@ class ClientNode:
         else:
             return None
 
+    def debugNextStep(self):
+        if self.debug:
+            # take input from terminal
+            input("Continue? ")
+            print("-------------------------------------------------------\n")
+
+
     def intakeMessage(self, connection):
 
         try:
@@ -55,7 +62,8 @@ class ClientNode:
                 incoming += connection.recv(1024)
 
             if self.debug:
-                print("Incoming message: " + incoming.decode())
+                print("\nIncoming message: " + incoming.decode())
+                self.debugNextStep()
 
             return self.parseMessage(incoming)
         except:
@@ -90,6 +98,11 @@ class ClientNode:
         # close the connection to the directory node
         self.directorySocket.close()
 
+        if directory is None:
+            if self.debug:
+                print("Could not retrieve directory")
+            exit(1)
+
         return directory
 
     def selectNode(self, directory, n):
@@ -111,12 +124,10 @@ class ClientNode:
         return f.encrypt(message.encode()).decode()
 
     def wrapPacket(self, wrapDepth, packet):
-        if self.debug:
-            print("Wrapping packet")
         wrapPacket = packet
         for i in range(wrapDepth):
             wrapPacket = {
-                "action": "forward",
+                "action": "forwardSetNextNode",
                 "payload": self.encrypt(json.dumps(wrapPacket), self.keys[-i-1])
             }
         return wrapPacket
@@ -130,7 +141,7 @@ class ClientNode:
         #     A = 54 mod 23 = 4
         A = pow(g, a, p)
         if self.debug:
-            print("Alice's public key: " + str(A))
+            print("Client's public key: " + str(A))
 
         # from a packet to send to Bob
         packet = {
@@ -156,12 +167,11 @@ class ClientNode:
         incoming = incoming.decode().replace(END.decode(), "")
         packet = json.loads(incoming)
         B = int(packet["B"])
-        if self.debug:
-            print("B: " + str(B))
-
         s = pow(B, a, p)
         if self.debug:
-            print("Shared Key: " + str(s))
+            print("Proxy's public key: " + str(B))
+            print("Shared Key: " + str(s) + "\n")
+            self.debugNextStep()
         # save the key
 
         self.keys.append(s)
@@ -225,17 +235,15 @@ class ClientNode:
                 print("No reply from node")
                 exit(1)
 
-            # TODO: Negotiate the secret key
-
             self.negotiateKey(numWrappers)
 
         if self.debug:
             print("\n\n------------------------------------------------------\n\n")
-            print("Keys: " + str(self.keys))
+            print("Shared Keys: " + str(self.keys))
             print("\n\n------------------------------------------------------\n\n")
 
         while True:
-            message = input("Enter a message to send: ")
+            message = input("Enter a message to send (Type 'exit' to  escape): ")
 
             if message == "exit":
                 break

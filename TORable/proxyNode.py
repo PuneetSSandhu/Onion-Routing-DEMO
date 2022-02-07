@@ -9,10 +9,10 @@ import json
 import random
 import sys
 import base64
+from time import sleep
 
 CRLF = b"\r\n"
 END = CRLF + CRLF
-
 
 class ProxyClient:
     def __init__(self, connection, debug):
@@ -28,7 +28,6 @@ class ProxyClient:
 
     def setId(self, id):
         self.id = id
-
 
 class ProxyNode:
 
@@ -67,9 +66,13 @@ class ProxyNode:
         message = f.decrypt(message.encode())
         return message.decode()
 
+    def animateSleep(self):
+        if self.debug:
+            sleep(0.5)
+
     def parseMessage(self, message, clientID):
         if self.debug:
-            print("Parsing message")
+            print("PARSING MESSAGE")
         message = message.decode()
         message = message.replace(END.decode(), "")
         message = json.loads(message)
@@ -84,13 +87,13 @@ class ProxyNode:
             else:
                 # this is the exit node
                 return None,  nodeType
-        elif message["action"] == "forward":
+        elif message["action"] == "forwardSetNextNode":
             # get the message
             message = message["payload"]
-            # TODO: forward the message to the next node as a string
             message = self.decrypt(message, self.clientList[clientID].key)
             if self.debug:
-                print("Forwarding message: " + str(message))
+                print("Forwarding message: " + str(message) + "\n")
+            self.animateSleep()
             # convert message to json
             clientCon = self.clientList[clientID].connection
             # get the next node
@@ -107,8 +110,8 @@ class ProxyNode:
             response = response.replace(END.decode(), "")
             response = json.loads(response)
             if self.debug:
-                print("Response: " + str(response))
-            # TODO: Encrpyt the response packet
+                print("Response: " + str(response) + "\n")
+
             # send the response to the client
             clientCon.send(json.dumps(response).encode())
             clientCon.send(END)
@@ -116,10 +119,11 @@ class ProxyNode:
             # get the message
             msg = self.decrypt(message["payload"], self.clientList[clientID].key)
             # if my node type is 1 then print the message
-
-            print(f"Incoming Message: {msg}")
+            # print the encrypted message
+           
+            print(f"Source IP: {self.clientList[clientID].connection.getpeername()[0]}:{self.clientList[clientID].connection.getpeername()[1]}")
             if self.nodeType == 1:
-                return
+                print("Destination IP: 69.69.69.420")
             else: # otherwise send the message with a message action
                 packet = {
                     "action": "message",
@@ -129,23 +133,29 @@ class ProxyNode:
                 self.clientList[clientID].nextNode.send(json.dumps(packet).encode())
                 self.clientList[clientID].nextNode.send(END)
 
-                # print the source ip and destination ip of the message
-                print(f"Source IP: {self.clientList[clientID].nextNode.getsockname()[0]}:{self.clientList[clientID].nextNode.getsockname()[1]}")
-                print(f"Destination IP: {self.clientList[clientID].nextNode.getpeername()[0]}:{self.clientList[clientID].nextNode.getpeername()[1]}")
-
+                # print the destination ip of the message
+                print(f"Destination IP: {self.clientList[clientID].nextNode.getpeername()[0]}:{self.clientList[clientID].nextNode.getpeername()[1]} \n")
+            
+            print(f"Encrypted Message: {message['payload']}")
+            print("|")
+            print("|")
+            self.animateSleep()
+            print("V")
+            # print the decrypted message
+            print(f"Decrypted Message: {msg}\n")
         elif message["action"] == "key":
             p = 23
             g = 5
             # retrive the key from the message
             A = int(message["A"])
             if self.debug:
-                print("A: " + str(A))
+                print("Client's Public Key: " + str(A))
             # Bob chooses a secret integer b = 3, then sends Alice B = gb mod p
             # B = 53 mod 23 = 10
             b = random.randint(1, p-1)
             B = pow(g, b, p)
             if self.debug:
-                print("Bob's public key: " + str(B))
+                print("Proxy's public key: " + str(B))
             # send the key to the client
             packet = {
                 "B": B
@@ -155,7 +165,7 @@ class ProxyNode:
             # compute the shared secret key
             s = pow(A, b, p)
             if self.debug:
-                print("Shared Key: " + str(s))
+                print("Shared Key: " + str(s) + "\n")
             # save the key in the client object
             self.clientList[clientID].key = s
 
@@ -176,7 +186,7 @@ class ProxyNode:
 
         if self.debug:
             if nextNode is None and nodeType == 1:
-                print("This is the exit node")
+                print("This is the exit node\n")
             else:
                 print(f"Next node: {nextNode}")
                 print(f"My id: {client.id}")
@@ -206,9 +216,6 @@ class ProxyNode:
                 client.connection.close()
                 exit(1)
         else:
-            if self.debug:
-                print(
-                    f"Will relay to provided ip and port upon further forward requests")
             # send a confirmation to the client
             client.connection.send(json.dumps(
                 {"action": "confirm"}).encode())

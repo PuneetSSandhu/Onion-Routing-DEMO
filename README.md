@@ -48,14 +48,14 @@ Now you need a single client node. Look a the help prompt from `client.py`.
 
 > `python3 clientNode.py -h`
 
-This will build the onion route for you. By default it will start one proxy node. You will see lots of traffic if this works correctly and a prompt to input a message.
+This will build the onion route for you. By default a client will try to start a route with one proxy node. Use the argument `-n <path_len>` to make the path length at least 3 nodes long. You will see lots of traffic if this works correctly and a prompt to input a message.
 Start sending some messages and observe. Try running with different numbers of proxy nodes too.
 
 ## Lab Questions:
 
 ### Q1: Longer routes
 
-Try passing messages through longer onion routes (more proxy nodes). What do you notice about the latency? (Get a basic time reading, maybe add some time stamps in the code.)
+Try passing messages through longer onion routes (more proxy nodes). What do you notice about the latency? Get a basic time reading, maybe add some time stamps in the code after a the client sends a messages and the proxy relays receive them. If all else fails you can try using your phone's as a stop watch.
 
 ### Q2: Message encryption
 
@@ -63,7 +63,11 @@ Assume that the destination you are accessing doesn't support end-to-end encrypt
 
 ### Q3: Deanonymizing
 
-By default, Tor creates an onion route with 3 nodes between the client and the destination. When passing a message through the onion relay, can any of the nodes determine both the source and destination of these messages? What is the communication structure of the nodes?
+By default, Tor creates an onion route with 3 nodes between the client and the destination. When passing a message through the onion relay, can any of the nodes determine both the source and destination of these messages? Which who communicates directly with who (client, guard, middle, exit, destination)?
+
+## Lab Submission
+
+Submit a txt file or pdf with your answers.
 
 ## Lab Help
 

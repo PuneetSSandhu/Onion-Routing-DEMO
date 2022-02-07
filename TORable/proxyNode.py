@@ -68,7 +68,7 @@ class ProxyNode:
 
     def animateSleep(self):
         if self.debug:
-            sleep(0.5)
+            sleep(0.0)
 
     def parseMessage(self, message, clientID):
         if self.debug:

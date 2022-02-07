@@ -1,0 +1,22 @@
+1.  Try passing messages through longer onion routes (more than 3 proxy nodes). What do you notice about the latency? 
+    Get a basic time reading, maybe add some time stamps in the code after a the client sends a messages and the proxy 
+    relays receive them. If all else fails you can try using your phone's as a stop watch.
+
+
+ANSWER HERE
+
+
+2.  Assume that the destination you are accessing doesn't support end-to-end encryption. When passing the message 
+    through the onion route, can any of the nodes see the direct message? If any of the nodes can see the traffic, 
+    suggest a potential fix.
+   
+
+ANSWER HERE
+
+
+3.  By default, Tor creates an onion route with 3 nodes between the client and the destination. When passing a message 
+    through the onion relay, can any of the nodes determine both the source and destination of these messages? 
+    Which who communicates directly with who (client, guard, middle, exit, destination)?
+    
+    
+ANSWER HERE

@@ -12,11 +12,10 @@ END = CRLF + CRLF
 
 class DirNode:
 
-    def __init__ (self, port, numNodes, ip, debug):
+    def __init__ (self, port, numNodes, debug):
         self.port = port
         self.numNodes = numNodes
         self.debug = debug
-        self.host = ip
         self.dir = []
 
         # start a socket listening for incoming connections
@@ -93,8 +92,6 @@ class DirNode:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Run n proxy nodes.')
-    # my host 
-    parser.add_argument('-i', '--ip', type=str, default='127.0.0.1', help='ip address of the proxy node')
     # my port number
     parser.add_argument("-p", "--port", help="port number for the proxy node", type=int, default=8081)
     # debug mode
@@ -103,7 +100,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
     port = args.port
     debug = args.debug
-    ip = args.ip
 
     # defug string
     if debug:
@@ -113,7 +109,7 @@ if __name__ == "__main__":
 
     print("Starting directory node on port: " + str(port))
 
-    dirNode = DirNode(port, 0, ip, debug)    
+    dirNode = DirNode(port, 0, debug)    
     try:
         dirNode.run()
     except KeyboardInterrupt:

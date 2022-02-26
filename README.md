@@ -10,7 +10,7 @@ Direct or ssh access to the DH lab machines.
 
 Clone this repo :)
 
-> Skip to Part 2 if you have no firends or are doing this at home... alone :(
+> Skip to Part 2 if you have no friends or are doing this at home... alone :(
 
 ### Step 2:
 
